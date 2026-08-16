@@ -122,11 +122,43 @@ message list by hand.
 
 ```bash
 pip install -e ".[dev]"
-pytest
+pytest                          # ~4s, no network, no API key
+RAGBOT_LLM_TESTS=1 pytest       # also runs the handful that call the model
 ```
 
-Tests cover the two invariants the pipeline depends on: deterministic chunk ids, and
-citation parsing. Neither needs network access or an API key.
+Tests cover the invariants the pipeline depends on — deterministic chunk ids, citation
+parsing, surrogate handling — plus a retrieval quality evaluation.
+
+### Retrieval evaluation
+
+`tests/eval_questions.json` holds 32 questions over the demo corpus in `docs/`, each
+labelled with the document that must be retrieved. It is deliberately bilingual: Russian
+questions against English documents is the demanding case, and the one an English-only
+embedding model fails silently. The evaluation builds its own Chroma index from `docs/`
+in a temp directory, so it is reproducible in a fresh clone and independent of whatever
+is in your real store.
+
+Metrics (`src/ragbot/evaluation.py`), ranked over retrieved *chunks*:
+
+- **recall@k** — did a chunk of the right document reach the top k, i.e. would it be in
+  the model's context at that `RETRIEVER_K`
+- **MRR** — how high it ranked; distinguishes "first result" from "barely scraped in"
+
+Measured on the current configuration versus the English-only model shipped before:
+
+| | recall@1 | recall@8 | MRR |
+|---|---|---|---|
+| multilingual (current) | 0.812 | 0.969 | 0.862 |
+| bge-small-en | 0.438 | 0.938 | 0.617 |
+| bge-small-en, Russian questions only | 0.190 | 0.905 | 0.440 |
+
+Note how little recall@8 moves: eight chunks out of a 24-chunk corpus is a third of
+everything, so the right document turns up almost by accident. recall@1 and MRR are what
+discriminate, and the thresholds lean on them. Swapping `EMBEDDING_MODEL` back to an
+English-only model fails four tests with a per-question breakdown of what was missed.
+
+Out-of-domain questions are checked too: they must land measurably further away than
+real ones, and with `RAGBOT_LLM_TESTS=1` the bot must refuse them rather than improvise.
 
 See [CLAUDE.md](CLAUDE.md) for architecture notes and known rough edges.
 

@@ -10,7 +10,8 @@ source .venv/bin/activate
 
 ragbot-ingest                    # index docs/ (+ Confluence if configured) into Chroma
 ragbot [session-name]            # interactive terminal chat, default session "default"
-pytest                           # no network, no API key needed
+pytest                           # ~4s, no network, no API key needed
+RAGBOT_LLM_TESTS=1 pytest        # plus the three tests that call the model
 ```
 
 The package is installed editable (`pip install -r requirements.txt` resolves to `-e .`),
@@ -90,6 +91,25 @@ regardless of the context's language.
   otherwise everything is dramatically slower.
 - `data/` holds both the Chroma collection and `checkpoints.sqlite`; it is gitignored
   and disposable, but deleting it also drops every saved conversation.
+
+## Retrieval evaluation
+
+`tests/test_retrieval_quality.py` scores 32 labelled questions (`tests/eval_questions.json`)
+against an index built from `docs/` alone, in a temp directory — never the project's own
+store, which also holds Confluence content and drifts as people edit pages.
+
+- Metrics live in `src/ragbot/evaluation.py` and are unit-tested themselves: a wrong
+  metric does not fail loudly, it reports a plausible number and protects nothing.
+- Scoring ranks **chunks**, not documents. With four documents in the corpus, collapsing
+  to distinct documents would make recall@4 identically 1.0.
+- **recall@8 is nearly decorative here** and passes even with a broken embedding model —
+  eight of 24 chunks is a third of the corpus. recall@1 and MRR carry the signal.
+  Thresholds sit between the current model (0.812 / 0.862) and the English-only one
+  that was shipped before (0.438 / 0.617; 0.190 / 0.440 on Russian questions alone).
+- Keep the question set bilingual. The English-only regression looked acceptable on the
+  aggregate and was catastrophic on Russian questions specifically.
+- Tests that call the model are skipped unless `RAGBOT_LLM_TESTS=1`, and they redirect
+  `settings.checkpoint_db` to a temp file so they never write into real conversations.
 
 ## Pinned dependencies
 

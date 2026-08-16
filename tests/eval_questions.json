@@ -1,0 +1,62 @@
+{
+  "_comment": [
+    "Retrieval evaluation set for the demo corpus in docs/.",
+    "Deliberately bilingual: the real usage pattern is Russian questions against",
+    "English documents, which is exactly what an English-only embedding model",
+    "silently fails at. 'expected' lists the source(s) that must be retrieved.",
+    "Questions whose answer genuinely appears in two documents list both."
+  ],
+
+  "questions": [
+    {"q": "что стоики говорят о вещах, которые не в нашей власти?", "expected": ["stoicism.md"]},
+    {"q": "кто основал стоицизм и где он преподавал?", "expected": ["stoicism.md"]},
+    {"q": "what is the only genuine good according to the Stoics?", "expected": ["stoicism.md"]},
+    {"q": "что такое предварительное обдумывание несчастий?", "expected": ["stoicism.md"]},
+    {"q": "кем был Эпиктет до того, как стал учителем философии?", "expected": ["stoicism.md"]},
+    {"q": "what does it mean to live in agreement with nature?", "expected": ["stoicism.md"]},
+    {"q": "что такое предпочитаемое безразличное?", "expected": ["stoicism.md"]},
+    {"q": "who wrote the Meditations?", "expected": ["stoicism.md"]},
+
+    {"q": "что означает тезис существование предшествует сущности?", "expected": ["existentialism.md"]},
+    {"q": "what did Sartre mean by bad faith?", "expected": ["existentialism.md"]},
+    {"q": "что такое абсурд в философии Камю?", "expected": ["existentialism.md"]},
+    {"q": "почему Сизифа предлагают представлять счастливым?", "expected": ["existentialism.md"]},
+    {"q": "what is authenticity and how is it lost?", "expected": ["existentialism.md"]},
+    {"q": "кто считается предшественником экзистенциализма?", "expected": ["existentialism.md"]},
+    {"q": "why is a person condemned to be free?", "expected": ["existentialism.md"]},
+    {"q": "что такое тревога перед лицом собственной свободы?", "expected": ["existentialism.md"]},
+
+    {"q": "что такое принцип полезности?", "expected": ["utilitarianism.md"]},
+    {"q": "what dimensions does the hedonic calculus measure?", "expected": ["utilitarianism.md"]},
+    {"q": "чем высшие удовольствия отличаются от низших?", "expected": ["utilitarianism.md"]},
+    {"q": "какие возражения выдвигают против утилитаризма?", "expected": ["utilitarianism.md"]},
+    {"q": "what is rule utilitarianism and why did it arise?", "expected": ["utilitarianism.md"]},
+    {"q": "кто основал классический утилитаризм?", "expected": ["utilitarianism.md"]},
+    {"q": "better to be Socrates dissatisfied than a fool satisfied — whose argument is that?", "expected": ["utilitarianism.md"]},
+    {"q": "можно ли жертвовать меньшинством ради большинства?", "expected": ["utilitarianism.md"]},
+
+    {"q": "что такое чистая доска в теории познания?", "expected": ["empiricism.md"]},
+    {"q": "what did Hume conclude about causation?", "expected": ["empiricism.md"]},
+    {"q": "чем первичные качества отличаются от вторичных?", "expected": ["empiricism.md"]},
+    {"q": "что означает esse est percipi?", "expected": ["empiricism.md"]},
+    {"q": "what is the inductive method and who championed it?", "expected": ["empiricism.md"]},
+    {"q": "кто разбудил Канта от догматического сна?", "expected": ["empiricism.md"]},
+    {"q": "какие три британских мыслителя составляют классический эмпиризм?", "expected": ["empiricism.md"]},
+    {"q": "чего логический позитивизм требовал от осмысленных высказываний?", "expected": ["empiricism.md"]}
+  ],
+
+  "_negative_comment": [
+    "Out-of-domain questions. Nothing in docs/ answers these, so the retriever",
+    "should rank everything it returns much further away than for a real question.",
+    "The bot must answer 'I don't know' rather than improvise from whatever came back."
+  ],
+
+  "negative": [
+    "как настроить ingress в kubernetes?",
+    "какая столица Австралии?",
+    "what is the SRT streaming protocol?",
+    "как приготовить борщ?",
+    "who won the 2018 football world cup?",
+    "какой сейчас курс доллара?"
+  ]
+}
