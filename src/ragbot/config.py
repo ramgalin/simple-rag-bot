@@ -20,14 +20,19 @@ class Settings(BaseSettings):
     chunk_overlap: int = 100     # overlap between adjacent chunks
 
     # embeddings (local ONNX model via fastembed, 384-dim)
-    embedding_model: str = "BAAI/bge-small-en-v1.5"
+    # Multilingual on purpose: questions get asked in Russian about English pages.
+    # An -en- model scores "амбисоник" against "ambisonics" barely above noise.
+    embedding_model: str = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
 
     # vector store
     chroma_dir: str = "./data/chroma"
     collection_name: str = "ragbot"
 
     # retrieval
-    retriever_k: int = 4     # how many chunks to pull per question
+    retriever_k: int = 8     # how many chunks to pull per question
+
+    # conversation memory — LangGraph checkpointer, one row per (thread_id, step)
+    checkpoint_db: str = "./data/checkpoints.sqlite"
 
     # Confluence connector (optional)
     confluence_url: str | None = None

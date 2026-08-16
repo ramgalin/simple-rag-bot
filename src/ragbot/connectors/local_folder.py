@@ -41,6 +41,7 @@ def load_folder(folder: str) -> list[Document]:
         rel = str(path.relative_to(root))
         for d in loaded:
             d.metadata["source"] = rel
+            d.metadata["origin"] = "local"
 
         if loaded:
             docs.extend(loaded)

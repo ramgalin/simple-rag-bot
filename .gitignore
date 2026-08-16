@@ -3,6 +3,8 @@
 data/
 __pycache__/
 *.pyc
+*.egg-info/
+.pytest_cache/
 importtime.log
 
 # personal documents for indexing — the demo set in docs/ stays tracked

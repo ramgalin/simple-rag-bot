@@ -7,15 +7,21 @@ local Chroma, LLM via a provider (OpenAI / Anthropic / Langdock).
 
 ```bash
 source .venv/bin/activate
-export PYTHONPATH=src            # the package lives under src/ and is not pip-installed
 
-python -m ragbot.ingest          # index docs/ (+ Confluence if configured) into Chroma
-python -m ragbot.cli             # interactive terminal chat
+ragbot-ingest                    # index docs/ (+ Confluence if configured) into Chroma
+ragbot [session-name]            # interactive terminal chat, default session "default"
+pytest                           # no network, no API key needed
 ```
 
-Dependencies: `pip install -r requirements.txt`. Config lives in `.env` (template in
-`.env.example`), read through pydantic-settings; every field is declared in
-`src/ragbot/config.py`.
+The package is installed editable (`pip install -r requirements.txt` resolves to `-e .`),
+so no `PYTHONPATH=src` and the two console scripts come from `[project.scripts]`.
+`python -m ragbot.ingest` / `python -m ragbot.cli` still work.
+
+Dependencies live in `pyproject.toml`, pinned by major — `requirements.txt` is just a
+pointer to the project. Dev extras: `pip install -e ".[dev]"`.
+
+Config lives in `.env` (template in `.env.example`), read through pydantic-settings;
+every field is declared in `src/ragbot/config.py`.
 
 ## Architecture
 
@@ -31,10 +37,19 @@ Indexing — `ingest.py:index()`:
   errors are swallowed so ingestion never dies on it. Also writes a human-readable `source`.
 - `chunking.py` — RecursiveCharacterTextSplitter with `add_start_index=True`;
   `start_index` is the precise anchor inside the document, used in citations.
+  Each chunk is then prefixed with its `source` (file name / Confluence page title):
+  the title otherwise lives only in metadata and is invisible to the embedding, so
+  "what projects do we have" had nothing to match against names like `l1ve-audio-sender`.
+  Prefixing happens *after* splitting, so every chunk carries it and `start_index`
+  still refers to the original document.
 - `ids.py` — deterministic chunk id = sha256(`source:start_index:text`).
   This is the key invariant: same chunk → same id (upsert), edited text → new id.
   That is what makes `index()` a real sync — it adds new ids and deletes from Chroma
   the ones no longer present in the source. Re-running it is idempotent.
+- Deletion is scoped by origin. Every document carries `metadata["origin"]`
+  (`local` / `confluence`), and `index()` only deletes orphaned chunks whose origin
+  loaded successfully this run — a connector that raised must not wipe its own content
+  out of the index. Rows predating this metadata are treated as `local`.
 
 Answering — `graph.py`, a LangGraph graph `condense → retrieve → generate`:
 
@@ -43,11 +58,15 @@ Answering — `graph.py`, a LangGraph graph `condense → retrieve → generate`
 - `retrieve` — Chroma `as_retriever(k=retriever_k)` over the rewritten question.
 - `generate` — numbers the chunks `[1]`, `[2]`… in the context; the model must cite
   those numbers.
-- Memory *is* the checkpointer (`MemorySaver`) plus `thread_id`, not a hand-managed
-  message list. `cli.py` passes only `{"question": ...}`; history is restored by the
-  checkpointer. MemorySaver is process-local — a restart starts an empty conversation.
-- `sources_for_answer()` parses `[N]` **out of the answer text** and prints only the
-  sources actually cited, not every retrieved chunk.
+- Memory *is* the checkpointer (`SqliteSaver` over `checkpoint_db`) plus `thread_id`,
+  not a hand-managed message list. `cli.py` passes only `{"question": ...}`; history is
+  restored by the checkpointer. The CLI's positional argument *is* the `thread_id`, so
+  `ragbot stoicism` resumes that conversation across restarts.
+- `graph.warmup()` loads the embedding model by hitting the retriever only. It must not
+  invoke the graph: that would spend an LLM call and write a checkpoint on every startup.
+- `citations.py:sources_for_answer()` parses `[N]` **out of the answer text** and prints
+  only the sources actually cited, not every retrieved chunk. It lives in its own module
+  (re-exported from `graph`) so tests can import it without booting the LLM and Chroma.
 
 Answer language: `lang.py` (lingua) detects the language of the **question**, and it is
 hard-substituted into the system prompt. The answer is always in the question's language,
@@ -58,12 +77,19 @@ regardless of the context's language.
 - The model and retriever are constructed at module level in `graph.py` (`_model`,
   `_retriever`) — importing `ragbot.graph` already reads `.env` and initializes Chroma.
 - Embeddings are `FastEmbedEmbeddings` from `langchain_community` (ONNX on CPU, no torch).
-  Default model `BAAI/bge-small-en-v1.5`, 384 dimensions, downloaded once into `~/.cache`.
-  If you change `embedding_model`, delete the existing Chroma collection — the
-  dimensions will not match.
+  Default `sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2`, 384 dimensions,
+  downloaded once into `~/.cache`. **Keep it multilingual.** Questions are asked in
+  Russian about English pages; the previous `BAAI/bge-small-en-v1.5` scored
+  cos(амбисоник, ambisonics)=0.61 against cos(амбисоник, banana)=0.57 — a 0.04 margin,
+  i.e. noise, and Russian questions retrieved essentially random chunks. The current
+  model scores 0.86 vs 0.31 on the same pair.
+  If you change `embedding_model`, delete `data/chroma` — dimensions will not match.
+  fastembed warns that this model now uses mean pooling instead of CLS; that is expected,
+  do not pin fastembed back to 0.5.1 over it.
 - `.venv` must live on the native WSL filesystem (`/home/...`), never under `/mnt/c` —
   otherwise everything is dramatically slower.
-- `data/` (Chroma) and `.env` are not tracked in git.
+- `data/` holds both the Chroma collection and `checkpoints.sqlite`; it is gitignored
+  and disposable, but deleting it also drops every saved conversation.
 
 ## Pinned dependencies
 
@@ -74,10 +100,21 @@ regardless of the context's language.
 
 ## Known tech debt
 
-- A connector that fails is indistinguishable from a source that went empty:
-  `ingest.index()` computes `stale = existing - current` and deletes those ids.
-  So when Confluence errors out, its chunks are silently dropped from Chroma and only
-  come back on the next successful run. Deleting per-source (or skipping the delete
-  phase when a connector raised) would be safer.
-- `requirements.txt` is otherwise unpinned, so a fresh install can drift into
-  incompatible majors — that is exactly how the atlassian break above appeared.
+- **A partial Confluence load would still delete.** Origin-scoped deletion covers a
+  connector that *raises*, but a connector that returns an incomplete page set reads as
+  success, and the missing pages' chunks get purged. Not observed so far, and there is
+  no reason to suspect the loader of it — but a mid-pagination network error would look
+  exactly like a shrinking space.
+- Confluence is a live source that other people and agents write to, so page counts
+  legitimately change between runs. Do not read a jump in chunk count as a bug without
+  checking the space first.
+- `confluence.py` sets `metadata["source"]` to the page title, so two pages with the
+  same title are indistinguishable in a citation, and a retitled page re-indexes as new.
+- No test covers the graph itself — the nodes need an LLM. Injecting a fake chat model
+  would make `condense`/`generate` testable.
+- Confluence space-template pages get indexed as content. The page titled "Ambisonics"
+  is just the space homepage ("In a sentence or two, describe the purpose of this
+  space", "Filter by Label") and is pure retrieval noise.
+- Inventory questions ("list everything we have") are a poor fit for top-k retrieval —
+  it returns `retriever_k` chunks, not a complete enumeration. Prefixing chunks with
+  their titles made these answerable, but the answer is still bounded by k.

@@ -1,0 +1,49 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "simple-rag-bot"
+version = "0.1.0"
+description = "Educational RAG bot on LangChain + LangGraph with local embeddings and Chroma"
+readme = "README.md"
+requires-python = ">=3.12"
+license = "MIT"
+
+# Majors are pinned deliberately: this project was already broken once by an
+# unpinned dependency jumping a major (atlassian-python-api 5.x renamed a kwarg
+# that langchain-community's ConfluenceLoader still passes positionally).
+dependencies = [
+    "langchain>=1.0,<2",
+    "langchain-core>=1.0,<2",
+    "langchain-community>=0.4,<1",
+    "langchain-text-splitters>=1.0,<2",
+    "langchain-chroma>=1.0,<2",
+    "langchain-anthropic>=1.0,<2",
+    "langchain-openai>=1.0,<2",
+    "langgraph>=1.0,<2",
+    "langgraph-checkpoint-sqlite>=3.0,<4",
+    "fastembed>=0.8,<1",
+    "chromadb>=1.5,<2",
+    "pypdf>=6,<7",
+    # <5 specifically: 5.x renamed get_all_pages_from_space(space=) -> (space_key=)
+    "atlassian-python-api>=4,<5",
+    "beautifulsoup4>=4,<5",
+    "pydantic-settings>=2,<3",
+    "python-dotenv>=1,<2",
+    "lingua-language-detector>=2,<3",
+    "markdownify>=1,<2",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8"]
+
+[project.scripts]
+ragbot = "ragbot.cli:run_chat"
+ragbot-ingest = "ragbot.ingest:index"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

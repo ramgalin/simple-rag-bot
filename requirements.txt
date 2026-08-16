@@ -1,19 +1,5 @@
-langchain>=1.0
-langchain-core
-langchain-community
-langchain-text-splitters
-langchain-chroma
-langchain-anthropic
-langchain-openai
-langgraph
-fastembed
-chromadb
-pypdf
-# 5.x renamed get_all_pages_from_space(space=) -> (space_key=),
-# which langchain-community's ConfluenceLoader does not yet pass
-atlassian-python-api<5
-beautifulsoup4
-pydantic-settings
-python-dotenv
-lingua-language-detector
-markdownify
+# Dependencies live in pyproject.toml — this file just installs the project itself.
+# `pip install -r requirements.txt` keeps working and now also puts the
+# `ragbot` / `ragbot-ingest` commands on PATH.
+# For tests: pip install -e ".[dev]"
+-e .

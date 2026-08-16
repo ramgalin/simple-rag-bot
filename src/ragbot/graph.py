@@ -1,12 +1,15 @@
-import re
+import sqlite3
+from pathlib import Path
 from typing import Annotated, TypedDict
 
 from langchain_core.documents import Document
 from langchain_core.messages import AIMessage, HumanMessage, BaseMessage
 from langgraph.graph import StateGraph, START, END
 from langgraph.graph.message import add_messages
-from langgraph.checkpoint.memory import MemorySaver
+from langgraph.checkpoint.sqlite import SqliteSaver
 
+from ragbot.citations import sources_for_answer
+from ragbot.config import settings
 from ragbot.retriever import get_retriever
 from ragbot.llm import build_llm
 from ragbot.prompts import CONDENSE_PROMPT, RAG_PROMPT
@@ -68,6 +71,23 @@ def generate(state: State) -> dict:
     }
 
 
+def warmup() -> None:
+    """Load the embedding model ahead of the first real question.
+
+    Deliberately only touches the retriever: running the whole graph would also
+    spend an LLM call and write a checkpoint on every startup.
+    """
+    _retriever.invoke("warmup")
+
+
+def _checkpointer() -> SqliteSaver:
+    """SQLite-backed checkpointer — conversations survive a restart."""
+    path = Path(settings.checkpoint_db)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    # check_same_thread=False: LangGraph may touch the connection from a worker thread
+    return SqliteSaver(sqlite3.connect(path, check_same_thread=False))
+
+
 def build_graph():
     g = StateGraph(State)
     g.add_node("condense", condense)
@@ -80,21 +100,9 @@ def build_graph():
     g.add_edge("generate", END)
 
     # checkpointer persists State per thread_id -> this IS the memory
-    return g.compile(checkpointer=MemorySaver())
+    return g.compile(checkpointer=_checkpointer())
 
 
-def sources_for_answer(answer: str, docs) -> str:
-    used = []
-    for n in re.findall(r"\[(\d+)\]", answer):
-        n = int(n)
-        if n not in used and 1 <= n <= len(docs):
-            used.append(n)
-    if not used:
-        return "(no sources cited)"
-    lines = []
-    for n in used:
-        d = docs[n - 1]
-        src = d.metadata.get("source", "unknown")
-        start = d.metadata.get("start_index", 0)
-        lines.append(f"[{n}] {src} (offset {start})")
-    return "\n".join(lines)
+# re-exported so `from ragbot.graph import sources_for_answer` keeps working;
+# it lives in citations.py because importing this module boots the LLM and Chroma
+__all__ = ["State", "build_graph", "warmup", "sources_for_answer"]
