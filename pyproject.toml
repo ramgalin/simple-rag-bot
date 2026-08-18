@@ -23,6 +23,9 @@ dependencies = [
     "langchain-openai>=1.0,<2",
     "langgraph>=1.0,<2",
     "langgraph-checkpoint-sqlite>=3.0,<4",
+    # async checkpointing: SqliteSaver raises on every async method, so any
+    # async frontend needs AsyncSqliteSaver, which needs this
+    "aiosqlite>=0.20,<1",
     "fastembed>=0.8,<1",
     "chromadb>=1.5,<2",
     "pypdf>=6,<7",
@@ -37,6 +40,8 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = ["pytest>=8"]
+# the web UI is optional: the CLI must stay installable without it
+gui = ["chainlit>=2,<3"]
 
 [project.scripts]
 ragbot = "ragbot.cli:run_chat"

@@ -51,6 +51,18 @@ ragbot               # start chatting
 Both are also available as modules if you prefer: `python -m ragbot.ingest`,
 `python -m ragbot.cli`.
 
+### Web UI
+
+```bash
+pip install -e ".[gui]"
+chainlit run app.py -w
+```
+
+A ChatGPT-style chat with streaming answers and a side panel: clicking a `[1]` in an
+answer opens the exact chunk it was based on, with its file and character offset.
+
+### Terminal
+
 Conversations are keyed by session name, and they persist:
 
 ```bash
@@ -85,6 +97,7 @@ All settings live in `.env` (see `.env.example`); defaults are declared in
 | `EMBEDDING_MODEL` | `sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2` | fastembed model (384-dim, multilingual) |
 | `CHROMA_DIR` | `./data/chroma` | vector store location |
 | `RETRIEVER_K` | `8` | chunks retrieved per question |
+| `DETECT_LANGUAGES` | `English,Russian` | languages the bot may answer in |
 | `CHECKPOINT_DB` | `./data/checkpoints.sqlite` | conversation memory |
 
 Changing `EMBEDDING_MODEL` requires deleting `data/chroma` — vector dimensions

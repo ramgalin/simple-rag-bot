@@ -1,0 +1,19 @@
+[project]
+enable_telemetry = false
+user_env = []
+session_timeout = 3600
+cache = false
+
+[features]
+unsafe_allow_html = false
+latex = false
+edit_message = true
+
+[UI]
+name = "RAG Bot"
+description = "Ask questions about the indexed documents. Answers cite their sources."
+default_theme = "dark"
+cot = "hidden"
+
+[meta]
+generated_by = "2.11.1"

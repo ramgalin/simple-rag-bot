@@ -52,6 +52,36 @@ Indexing — `ingest.py:index()`:
   loaded successfully this run — a connector that raised must not wipe its own content
   out of the index. Rows predating this metadata are treated as `local`.
 
+Frontends talk to `service.py`, never to `graph.py` directly. It owns the compiled
+graph (built once — `build_graph()` opens a fresh SQLite connection per call), input
+sanitising, and session listing. `cli.py` is a thin consumer of it and any GUI should be
+too; the moment a frontend assembles the graph itself, the two drift apart.
+
+- `ask()` blocks and returns a whole `Answer`; `stream_answer()` / `astream_answer()`
+  yield tokens. The async variant exists because Chainlit-style servers stall their
+  event loop on a blocking `invoke`.
+- **There are two compiled graphs, and they are not interchangeable.** `graph()` uses
+  `SqliteSaver`, `agraph()` uses `AsyncSqliteSaver`; the sync saver raises
+  NotImplementedError on *every* async method, so an async server driving the sync
+  graph dies on its first turn. Both write the same file and schema, so history is
+  shared. Sync callers must not touch `agraph()` and vice versa.
+- `Answer.citations` gives structured `Citation` objects (including the chunk text, for
+  a GUI side panel); `Answer.sources_text` gives the terminal's plain rendering. One
+  parser in `citations.py`, two renderings.
+- Streaming yields text only. Citations need the retrieved documents, so a frontend
+  streams tokens and then calls `last_answer(session)` — the graph already saved them.
+- `sessions()` is the sidebar list of a chat UI: it *is* the checkpointer's set of
+  thread ids. Do not add a second store of conversation history beside it.
+
+**`stream_mode="messages"` needs two filters, and both are load-bearing** (see
+`service._answer_tokens`):
+
+1. by node — `condense` also calls the LLM, so an unfiltered stream prints the
+   rewritten question as if it were the answer;
+2. by type — the stream carries the model's `AIMessageChunk` tokens *and* the finished
+   `HumanMessage`/`AIMessage` the node appends to state, both tagged `generate`.
+   Filtering by node alone emits the answer twice with the question wedged in between.
+
 Answering — `graph.py`, a LangGraph graph `condense → retrieve → generate`:
 
 - `condense` — rewrites the question into a standalone one using history.
@@ -73,10 +103,34 @@ Answer language: `lang.py` (lingua) detects the language of the **question**, an
 hard-substituted into the system prompt. The answer is always in the question's language,
 regardless of the context's language.
 
+The detector chooses only between the languages in `DETECT_LANGUAGES` (default
+`English,Russian`), not all 75 lingua knows. That is not tuning, it is a fix: across the
+full set, "кто основал стоицизм?" was detected as Serbian and "а я кто?" as Bulgarian,
+and the bot answered a Russian user in those languages. Widening the list brings the
+problem back — add a language only when it is genuinely in use.
+
+## Frontends
+
+`app.py` is a Chainlit UI (`chainlit run app.py -w`, install with `pip install -e ".[gui]"`).
+It is thin on purpose and talks only to `service.py`.
+
+- Chainlit's thread id *is* the LangGraph thread id (`app.session_id()`). Keeping them
+  equal is what stops the UI's conversation list and the graph's memory from diverging.
+  Do not give the graph its own id.
+- Citations become side-panel `cl.Text` elements named `[1]`, `[2]` — matching the
+  markers in the answer, which is what makes Chainlit render them as clickable
+  references. Renaming them breaks the link silently.
+- The element strips the source prefix that `chunking.py` adds, or the panel repeats
+  the heading shown directly above it.
+- Conversation history in the sidebar needs a Chainlit data layer, which is not set up
+  yet — `@cl.on_chat_resume` will not fire until it is. That is the next step.
+
 ## Things to know before editing
 
-- The model and retriever are constructed at module level in `graph.py` (`_model`,
-  `_retriever`) — importing `ragbot.graph` already reads `.env` and initializes Chroma.
+- The model and retriever are built lazily via `graph.model()` / `graph.retriever()`.
+  They used to be module-level, which made importing `ragbot.graph` read `.env`, open
+  Chroma and load the ONNX model as a side effect — that alone tripled the test suite's
+  runtime once `service.py` started importing it.
 - Embeddings are `FastEmbedEmbeddings` from `langchain_community` (ONNX on CPU, no torch).
   Default `sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2`, 384 dimensions,
   downloaded once into `~/.cache`. **Keep it multilingual.** Questions are asked in
