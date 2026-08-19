@@ -1,0 +1,18 @@
+{
+  "_comment": [
+    "Colour overrides. These land as inline styles on <html>, which is why they",
+    "belong here and not in theme.css: Chainlit links custom_css BEFORE its own",
+    "stylesheet, so an equal-specificity :root rule there loses the cascade.",
+    "Values are shadcn HSL triplets, matching the accent bar in public/logo_*.svg."
+  ],
+  "variables": {
+    "light": {
+      "--primary": "35 65% 47%",
+      "--primary-foreground": "40 30% 97%"
+    },
+    "dark": {
+      "--primary": "36 71% 58%",
+      "--primary-foreground": "30 15% 10%"
+    }
+  }
+}

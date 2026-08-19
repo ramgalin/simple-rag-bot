@@ -26,7 +26,14 @@ from langchain_core.documents import Document
 from langchain_core.messages import AIMessageChunk, BaseMessage
 
 from ragbot.citations import Citation, cited, sources_for_answer
-from ragbot.graph import GENERATE, build_async_graph, build_graph, warmup as _warmup
+from ragbot.graph import (
+    CONDENSE,
+    GENERATE,
+    RETRIEVE,
+    build_async_graph,
+    build_graph,
+    warmup as _warmup,
+)
 from ragbot.textio import strip_surrogates
 
 DEFAULT_SESSION = "default"
@@ -126,20 +133,88 @@ def stream_answer(question: str, session: str = DEFAULT_SESSION) -> Iterator[str
             yield text
 
 
+@dataclass(frozen=True)
+class Rewritten:
+    """condense finished: the question as it will actually be searched for."""
+
+    question: str
+    changed: bool
+
+
+@dataclass(frozen=True)
+class Retrieved:
+    """retrieve finished: which documents will be in the model's context."""
+
+    sources: list[str]      # distinct, in rank order
+    chunks: int
+
+
+@dataclass(frozen=True)
+class Token:
+    """One piece of the answer."""
+
+    text: str
+
+
+Event = Rewritten | Retrieved | Token
+
+
+def _distinct(values: list[str]) -> list[str]:
+    seen, out = set(), []
+    for v in values:
+        if v not in seen:
+            seen.add(v)
+            out.append(v)
+    return out
+
+
+async def astream_events(
+    question: str, session: str = DEFAULT_SESSION
+) -> AsyncIterator[Event]:
+    """Stream both what the graph is doing and what it is answering.
+
+    The gap between asking and the first token is several seconds — condensing
+    and retrieval happen first — so a UI that only waits for tokens looks frozen.
+    These events let it show the rewritten question and the documents found while
+    the answer is still being generated.
+
+    Ordering follows the graph: Rewritten, then Retrieved, then Tokens.
+    """
+    question = _clean(question)
+    g = await agraph()
+
+    async for mode, payload in g.astream(
+        {"question": question},
+        config=_config(session),
+        stream_mode=["updates", "messages"],
+    ):
+        if mode == "messages":
+            text = _answer_tokens(*payload)
+            if text:
+                yield Token(text)
+            continue
+
+        for node, update in payload.items():
+            if node == CONDENSE:
+                standalone = update.get("standalone", question)
+                yield Rewritten(question=standalone, changed=standalone != question)
+            elif node == RETRIEVE:
+                docs = update.get("docs", [])
+                yield Retrieved(
+                    sources=_distinct([d.metadata.get("source", "unknown") for d in docs]),
+                    chunks=len(docs),
+                )
+
+
 async def astream_answer(question: str, session: str = DEFAULT_SESSION) -> AsyncIterator[str]:
-    """Async version of `stream_answer`, for async servers (Chainlit, FastAPI).
+    """Answer tokens only — `astream_events` without the progress events.
 
     The graph's nodes are synchronous; LangGraph runs them in a worker thread,
     so this does not block the event loop.
     """
-    question = _clean(question)
-    g = await agraph()
-    async for chunk, meta in g.astream(
-        {"question": question}, config=_config(session), stream_mode="messages"
-    ):
-        text = _answer_tokens(chunk, meta)
-        if text:
-            yield text
+    async for event in astream_events(question, session):
+        if isinstance(event, Token):
+            yield event.text
 
 
 def last_answer(session: str = DEFAULT_SESSION) -> Answer | None:

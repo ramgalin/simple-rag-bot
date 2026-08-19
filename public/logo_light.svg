@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" width="48" height="48" role="img" aria-label="RAG Bot">
+  <g fill="none" stroke-linecap="round" stroke-linejoin="round">
+    <!-- Citation brackets: this bot's signature is that every claim carries [N].
+         Inside, the retrieved lines — the cited one is highlighted and reaches
+         furthest, the others recede. -->
+    <path d="M16 9 H9 V39 H16" stroke="#1a1d23" stroke-width="2.8"/>
+    <path d="M32 9 H39 V39 H32" stroke="#1a1d23" stroke-width="2.8"/>
+    <path d="M19 17 H27" stroke="#9aa1ab" stroke-width="2.2"/>
+    <path d="M19 24 H30" stroke="#c8862a" stroke-width="2.6"/>
+    <path d="M19 31 H24" stroke="#9aa1ab" stroke-width="2.2"/>
+  </g>
+</svg>

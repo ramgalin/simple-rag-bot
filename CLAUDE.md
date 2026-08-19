@@ -122,8 +122,63 @@ It is thin on purpose and talks only to `service.py`.
   references. Renaming them breaks the link silently.
 - The element strips the source prefix that `chunking.py` adds, or the panel repeats
   the heading shown directly above it.
-- Conversation history in the sidebar needs a Chainlit data layer, which is not set up
-  yet — `@cl.on_chat_resume` will not fire until it is. That is the next step.
+- Progress steps come from `service.astream_events`, which streams graph updates
+  alongside tokens. Five to six seconds pass before the first token on a cold turn
+  (condense, then retrieval), so without them the UI looks frozen.
+
+### Look (`public/`)
+
+- `logo_light.svg` / `logo_dark.svg` / `favicon.svg` — Chainlit picks these up by
+  filename from `public/`; there is no config entry for them. The favicon is a
+  deliberately reduced version of the mark (brackets plus one bar): the full three-line
+  logo turns to mush below ~20px.
+- **`custom_css` is linked BEFORE Chainlit's own stylesheet**, not after. So an
+  equal-specificity rule there loses the cascade — which is why `theme.css` carries no
+  colours and prefixes its class selectors with `:root` to lift them from (0,1,0) to
+  (0,2,0). Id selectors are already strong enough. Symptom of getting this wrong: the
+  UI keeps Chainlit's stock magenta while the logo picks up correctly.
+- **Colours go in `public/theme.json`**, not CSS. Chainlit injects
+  `variables.light` / `variables.dark` as `window.theme`, and the frontend writes them
+  as inline styles on `<html>` — which no stylesheet can outrank. Values are shadcn HSL
+  triplets (`"--primary": "35 65% 47%"`), not hex.
+- `theme.css` only targets ids and classes present in Chainlit 2.11's bundle —
+  `#message-composer`, `#welcome-screen`, `#starters`, `#thread-history`,
+  `#side-view-content`, `.message-content`, `.step`. Tailwind utility combos are avoided
+  on purpose: they churn between releases, and a selector that stops matching fails
+  silently rather than loudly.
+- `cot = "tool_call"` keeps the progress step visible while it runs and collapses it
+  afterwards. `"hidden"` would hide the very thing that fills the pre-token pause.
+- `confirm_new_chat = false` removes the "This will clear your current chat history"
+  prompt. That warning is accurate for stock Chainlit — every persistence call is
+  guarded by `if data_layer:`, so by default the browser holds the only copy and
+  "New Chat" really does destroy it. The dialog is rendered unconditionally, with no
+  check for whether a data layer exists, so with `chainlit_store.py` wired up it warns
+  about something that cannot happen. Re-enable it if persistence is ever removed.
+  (Clicking it mid-generation does abandon that one turn — `clear()` drops the socket,
+  and LangGraph only checkpoints on completion.)
+
+### Sidebar history (`chainlit_store.py`)
+
+- **Login is mandatory, not a nicety.** Chainlit's thread endpoints read
+  `current_user.identifier`, and `get_current_user()` returns None when no auth callback
+  is registered — so the sidebar raises rather than degrading. Credentials come from
+  `CHAINLIT_USER` / `CHAINLIT_PASSWORD`; unset means nobody can log in, deliberately.
+  `CHAINLIT_AUTH_SECRET` is also required (`chainlit create-secret`).
+- **`SQLAlchemyDataLayer` never creates its schema** — `ensure_schema()` does. It builds
+  INSERTs from whatever keys a `ThreadDict`/`StepDict`/`ElementDict` carries, so a
+  missing column fails mid-conversation rather than at startup.
+- Chainlit stores threads separately from the LangGraph checkpointer. That duplication
+  is fine *because the ids match* — verified: the same uuid appears in both stores for
+  one conversation. `@cl.on_chat_resume` therefore restores nothing by hand; the graph
+  already remembers the thread it is handed.
+- Chainlit ships storage clients for S3/GCS/Azure only. Without one it logs
+  "No blob_storage_client is configured" and silently drops every element, so a reopened
+  chat would have dead `[1]` links. `LocalStorageClient` writes them to `data/elements`.
+- The static mount for those files is inserted at the **front** of the route table:
+  Chainlit already registered a catch-all serving the SPA, and `app.mount()` appends —
+  the catch-all wins and returns index.html instead of the file.
+- Stopping generation mid-answer abandons the turn: LangGraph writes its checkpoint when
+  the run completes, so a cancelled turn leaves no trace in the graph's memory.
 
 ## Things to know before editing
 

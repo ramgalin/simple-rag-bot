@@ -55,11 +55,24 @@ Both are also available as modules if you prefer: `python -m ragbot.ingest`,
 
 ```bash
 pip install -e ".[gui]"
+chainlit create-secret          # put the result in .env as CHAINLIT_AUTH_SECRET
 chainlit run app.py -w
 ```
 
-A ChatGPT-style chat with streaming answers and a side panel: clicking a `[1]` in an
-answer opens the exact chunk it was based on, with its file and character offset.
+A ChatGPT-style chat with streaming answers, past conversations in the sidebar, and a
+source panel: clicking a `[1]` in an answer opens the exact chunk it was based on, with
+its file and character offset.
+
+While the answer is being prepared the UI shows what the bot is doing — the question it
+rewrote for search, then the documents it found — instead of an empty pause. On a cold
+turn that gap is five to six seconds.
+
+The sidebar needs a login, because Chainlit stores conversations per user. Set
+`CHAINLIT_USER`, `CHAINLIT_PASSWORD` and `CHAINLIT_AUTH_SECRET` in `.env`; there is no
+default password, so leaving them unset simply locks the UI.
+
+Reopening a conversation resumes it for real: the sidebar's thread id *is* the bot's
+memory key, so it remembers what was said before.
 
 ### Terminal
 

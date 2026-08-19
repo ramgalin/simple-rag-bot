@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" width="48" height="48" role="img" aria-label="RAG Bot">
+  <g fill="none" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M17 7 H8 V41 H17" stroke="#e8e6e1" stroke-width="4.5"/>
+    <path d="M31 7 H40 V41 H31" stroke="#e8e6e1" stroke-width="4.5"/>
+    <path d="M18 24 H30" stroke="#e0a44a" stroke-width="4.5"/>
+  </g>
+</svg>

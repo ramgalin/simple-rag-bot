@@ -1,0 +1,121 @@
+/* RAG Bot — visual theme.
+ *
+ * Chainlit is shadcn-based: colours are HSL triplets on :root, and the app is
+ * Tailwind-utility-heavy. So this file only leans on hooks that are stable in
+ * the built frontend — the ids and classes below (#message-composer,
+ * #welcome-screen, #starters, #thread-history, #side-view-content,
+ * .message-content, .ai-message, .step) all appear in Chainlit 2.11's bundle.
+ * Utility-class combos are deliberately not targeted: they change between
+ * releases, and a selector that stops matching just silently does nothing.
+ */
+
+/* Colours are NOT set here — see public/theme.json. This file is linked before
+   Chainlit's own stylesheet, so a `:root { --primary }` rule here would lose the
+   cascade at equal specificity. theme.json is applied as inline styles on <html>
+   and always wins. The same trap applies to every rule below, hence the doubled
+   `:root` prefixes: they lift class selectors from (0,1,0) to (0,2,0) so they
+   beat Chainlit's utility classes regardless of link order. Id selectors are
+   already strong enough and are left plain. */
+
+:root {
+  /* One number controls the reading column. ~46rem is roughly 75 characters at
+     the body size below — the range long-form text is comfortable at. */
+  --reading-column: 46rem;
+}
+
+/* ---------------------------------------------------------- reading column */
+
+#welcome-screen,
+#starters,
+#message-composer,
+:root .message-content {
+  max-width: var(--reading-column);
+  margin-inline: auto;
+}
+
+/* ------------------------------------------------------------- typography */
+
+:root .message-content {
+  font-size: 1rem;
+  line-height: 1.7;          /* airier than the default; this is prose, not UI */
+  letter-spacing: 0.003em;
+}
+
+:root .message-content p + p,
+:root .message-content ul,
+:root .message-content ol {
+  margin-top: 0.85em;
+}
+
+:root .message-content li + li {
+  margin-top: 0.3em;
+}
+
+:root .message-content h1,
+:root .message-content h2,
+:root .message-content h3 {
+  margin-top: 1.4em;
+  margin-bottom: 0.5em;
+  line-height: 1.3;
+}
+
+/* Author label above a message: present but quiet. */
+:root .message-name {
+  font-size: 0.8125rem;
+  letter-spacing: 0.02em;
+  opacity: 0.65;
+}
+
+/* ------------------------------------------------------------- citations */
+
+/* `[1]` markers are what this bot is for, so give them the weight of a real
+   reference rather than of body text. Chainlit turns the marker into a link
+   because the element is named `[1]`; this styles that link wherever it lands. */
+:root .message-content a {
+  color: hsl(var(--primary));
+  text-decoration: none;
+  font-weight: 500;
+  border-radius: 0.3em;
+  padding-inline: 0.15em;
+  transition: background-color 120ms ease;
+}
+
+:root .message-content a:hover {
+  background-color: hsl(var(--primary) / 0.14);
+}
+
+/* --------------------------------------------------------- progress steps */
+
+/* The "what the bot is doing now" line. It should read as a status note, not
+   as part of the answer — several seconds pass before the first token, and
+   this is what fills them. */
+:root .step {
+  font-size: 0.875rem;
+  color: hsl(var(--muted-foreground));
+  font-variant-numeric: tabular-nums;
+}
+
+/* ----------------------------------------------------------- side panel */
+
+/* Retrieved chunks are source text: monospace-ish measure, smaller, so the
+   panel reads as evidence rather than as more chat. */
+#side-view-content {
+  font-size: 0.9rem;
+  line-height: 1.65;
+}
+
+#side-view-title {
+  letter-spacing: 0.01em;
+}
+
+/* --------------------------------------------------------------- sidebar */
+
+#thread-history {
+  font-size: 0.9rem;
+}
+
+/* --------------------------------------------------------------- composer */
+
+#message-composer {
+  border-radius: calc(var(--radius) + 0.25rem);
+}
