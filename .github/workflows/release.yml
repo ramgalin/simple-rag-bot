@@ -1,0 +1,58 @@
+name: release
+
+on:
+  push:
+    tags: ["v*"]
+  # lets you publish from a branch without tagging, for a trial run
+  workflow_dispatch:
+
+jobs:
+  # Never publish an image whose tests do not pass.
+  tests:
+    uses: ./.github/workflows/tests.yml
+
+  publish:
+    needs: tests
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+      packages: write        # required to push to ghcr.io
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          # provided automatically; no secret to configure
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository }}
+          # v1.2.3 -> :1.2.3, :1.2, :latest
+          tags: |
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=raw,value=latest,enable=${{ startsWith(github.ref, 'refs/tags/v') }}
+
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          # Layer cache in GitHub's store: the slow layers are the dependency
+          # install and the 240 MB model download, and neither changes often.
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          # amd64 only. arm64 would need QEMU, and the build runs ONNX inference
+          # (the baked index) — emulated, that turns minutes into a lot of
+          # minutes. Add linux/arm64 here if Apple Silicon users need a native
+          # image and you can spend the build time.
+          platforms: linux/amd64

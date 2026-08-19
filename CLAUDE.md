@@ -10,7 +10,7 @@ source .venv/bin/activate
 
 ragbot-ingest                    # index docs/ (+ Confluence if configured) into Chroma
 ragbot [session-name]            # interactive terminal chat, default session "default"
-pytest                           # ~4s, no network, no API key needed
+pytest                           # ~4s, no API key needed
 RAGBOT_LLM_TESTS=1 pytest        # plus the three tests that call the model
 ```
 
@@ -157,6 +157,39 @@ It is thin on purpose and talks only to `service.py`.
   (Clicking it mid-generation does abandon that one turn — `clear()` drops the socket,
   and LangGraph only checkpoints on completion.)
 
+### Docker (`Dockerfile`, `docker-entrypoint.sh`)
+
+Built for "download and run": `docker run --env-file .env -p 8000:8000 ragbot`.
+
+- The embedding model **and** an index built from `docs/` are baked in at build time.
+  Both steps must work without any secrets — verified: `ragbot.ingest` needs no API key
+  (only embeddings), and Confluence is skipped when unconfigured. Do not add a build step
+  that needs a key.
+- Confluence is deliberately *not* indexed at build time: those credentials belong to
+  whoever runs the container. `docker run ... ragbot ingest` pulls it in at run time.
+- `VOLUME /app/data` — Docker copies the baked index into a fresh named volume, so it
+  survives; a **bind** mount does not, which is why the entrypoint rebuilds when
+  `/app/data/chroma` is missing.
+- The entrypoint validates `CHAINLIT_AUTH_SECRET`, the login pair and the provider's API
+  key before starting, because the failure modes are otherwise opaque (Chainlit's JWT
+  error is a raw traceback). Its subcommands are `serve` (default), `ingest`, `secret`,
+  `shell`.
+- `--host 0.0.0.0`, or the published port maps to nothing listening.
+
+### CI (`.github/workflows/`)
+
+- `tests.yml` runs the suite on push/PR and is also `workflow_call`-able, which is how
+  `release.yml` gates publishing on a green run.
+- It pins `FASTEMBED_CACHE_PATH` into the workspace so `actions/cache` can keep the
+  ~240 MB model; the default `/tmp/fastembed_cache` is not reliably cacheable. Cache key
+  is a hash of `config.py`, where `embedding_model` is declared.
+- Installs `[dev,gui]`: without chainlit the web-UI store tests skip silently, and a
+  skipped test protects nothing.
+- `RAGBOT_LLM_TESTS` stays unset in CI — those tests need a paid key. Everything else
+  runs, including the retrieval evaluation (local embeddings, no key).
+- `release.yml` publishes `linux/amd64` only. arm64 would run the baked-index build step
+  (ONNX inference) under QEMU emulation.
+
 ### Sidebar history (`chainlit_store.py`)
 
 - **Login is mandatory, not a nicety.** Chainlit's thread endpoints read
@@ -188,7 +221,8 @@ It is thin on purpose and talks only to `service.py`.
   runtime once `service.py` started importing it.
 - Embeddings are `FastEmbedEmbeddings` from `langchain_community` (ONNX on CPU, no torch).
   Default `sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2`, 384 dimensions,
-  downloaded once into `~/.cache`. **Keep it multilingual.** Questions are asked in
+  downloaded once into `FASTEMBED_CACHE_PATH` (default `/tmp/fastembed_cache`, *not*
+  `~/.cache` — and /tmp is wiped on reboot on many systems). **Keep it multilingual.** Questions are asked in
   Russian about English pages; the previous `BAAI/bge-small-en-v1.5` scored
   cos(амбисоник, ambisonics)=0.61 against cos(амбисоник, banana)=0.57 — a 0.04 margin,
   i.e. noise, and Russian questions retrieved essentially random chunks. The current

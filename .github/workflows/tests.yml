@@ -1,0 +1,47 @@
+name: tests
+
+on:
+  push:
+    branches: [master, develop]
+  pull_request:
+  # so the release workflow can gate publishing on a green run
+  workflow_call:
+
+jobs:
+  pytest:
+    runs-on: ubuntu-latest
+
+    env:
+      # fastembed defaults to /tmp/fastembed_cache, which actions/cache cannot
+      # reach reliably. Pin it inside the workspace so the ~240 MB model is
+      # downloaded once and restored on later runs.
+      FASTEMBED_CACHE_PATH: ${{ github.workspace }}/.cache/fastembed
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: pyproject.toml
+
+      - name: Cache the embedding model
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.FASTEMBED_CACHE_PATH }}
+          # config.py is where embedding_model is declared, so a model change
+          # invalidates the cache. It over-invalidates on unrelated config edits,
+          # which costs one download and is the cheap side to err on.
+          key: fastembed-${{ hashFiles('src/ragbot/config.py') }}
+
+      - name: Install
+        # gui too: without chainlit the web-UI store tests skip silently, and a
+        # skipped test protects nothing
+        run: pip install -e ".[dev,gui]"
+
+      - name: Run tests
+        # RAGBOT_LLM_TESTS is deliberately unset — the tests that call the model
+        # cost money and need a key. Everything else runs, including the
+        # retrieval-quality evaluation, which uses local embeddings only.
+        run: pytest -q
