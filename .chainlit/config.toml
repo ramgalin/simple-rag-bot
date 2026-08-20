@@ -1,0 +1,28 @@
+[project]
+enable_telemetry = false
+user_env = []
+session_timeout = 3600
+cache = false
+
+[features]
+unsafe_allow_html = false
+latex = false
+edit_message = true
+
+[UI]
+name = "RAG Bot"
+description = "Ask questions about the indexed documents. Answers cite their sources."
+default_theme = "dark"
+# "tool_call" keeps the progress step visible while it runs and collapses it
+# after — the point is to fill the pause before the first token, not to leave
+# machinery on screen afterwards.
+cot = "tool_call"
+custom_css = "/public/theme.css"
+# No confirmation on "New Chat". Chainlit asks by default because without a data
+# layer the browser holds the only copy of a conversation, so starting a new one
+# destroys it. We persist through chainlit_store.py, so the old chat stays in the
+# sidebar and the prompt would be warning about something that cannot happen.
+confirm_new_chat = false
+
+[meta]
+generated_by = "2.11.1"

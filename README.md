@@ -29,17 +29,79 @@ store is Chroma on disk.
 On WSL, keep the project and its virtualenv on the native filesystem (`/home/...`),
 not under `/mnt/c` — running Python across the 9p mount is dramatically slower.
 
-## Setup
+## Run it with Docker
+
+The quickest way to get a working bot: no Python setup, no model download, and the demo
+corpus is already indexed inside the image.
 
 ```bash
-python3 -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt        # installs the project itself (editable)
+docker pull ghcr.io/ramgalin/simple-rag-bot:latest
 
-cp .env.example .env                   # then fill in your key
+cp .env.example .env                 # fill in your API key, user and password
+docker run --rm ghcr.io/ramgalin/simple-rag-bot secret    # generate CHAINLIT_AUTH_SECRET, paste into .env
+
+docker run --env-file .env -p 8000:8000 \
+  -v ragbot-data:/app/data ghcr.io/ramgalin/simple-rag-bot
 ```
 
-The first indexing run downloads the embedding model (~220 MB) into `~/.cache`.
+Building it yourself works the same way — `docker build -t ragbot .`, then use `ragbot`
+in place of the registry path.
+
+Then open <http://localhost:8000> and log in with `CHAINLIT_USER` / `CHAINLIT_PASSWORD`.
+
+Or with compose, which wires up the env file, port and volume for you:
+
+```bash
+docker compose up
+```
+
+**Your `.env` never enters the image** — it is read at run time via `--env-file`, and
+`.dockerignore` keeps it out of the build context. The image itself carries no secrets,
+so it is safe to push to a registry.
+
+**Keep the volume.** `/app/data` holds the vector store, conversation memory and stored
+citations. Without it, every restart starts from an empty chat history.
+
+**Indexing your own documents:**
+
+```bash
+docker run --env-file .env -v ./my-docs:/app/docs:ro -v ragbot-data:/app/data ragbot ingest
+```
+
+The same applies to Confluence: set `CONFLUENCE_*` in `.env` and run `ingest`. It is
+deliberately not indexed at build time — those credentials belong to whoever runs the
+container, not to the image.
+
+If a required setting is missing the container stops immediately and says which one,
+rather than failing somewhere inside Chainlit's stack.
+
+## Setup from source
+
+```bash
+git clone https://github.com/ramgalin/simple-rag-bot.git
+cd simple-rag-bot
+
+python3 -m venv .venv
+source .venv/bin/activate
+
+pip install -e ".[gui]"                # drop [gui] for the terminal bot only
+                                       # add [dev] if you want to run the tests
+
+cp .env.example .env                   # then fill in your API key
+ragbot-ingest                          # build the index — required before the first run
+```
+
+`pip install -r requirements.txt` also works and is equivalent to a plain `pip install -e .`
+(terminal only, no web UI).
+
+Skipping `ragbot-ingest` is the classic first-run mistake: nothing errors, the index is
+just empty, and the bot answers "I don't know" to everything. Both frontends warn about
+it at startup.
+
+The first indexing run downloads the embedding model (~240 MB) into
+`/tmp/fastembed_cache`. That is fastembed's default and `/tmp` is wiped on reboot on
+many systems, so set `FASTEMBED_CACHE_PATH` to something permanent if you would rather
+not re-download it.
 
 ## Usage
 
@@ -50,6 +112,31 @@ ragbot               # start chatting
 
 Both are also available as modules if you prefer: `python -m ragbot.ingest`,
 `python -m ragbot.cli`.
+
+### Web UI
+
+```bash
+pip install -e ".[gui]"
+chainlit create-secret          # put the result in .env as CHAINLIT_AUTH_SECRET
+chainlit run app.py -w
+```
+
+A ChatGPT-style chat with streaming answers, past conversations in the sidebar, and a
+source panel: clicking a `[1]` in an answer opens the exact chunk it was based on, with
+its file and character offset.
+
+While the answer is being prepared the UI shows what the bot is doing — the question it
+rewrote for search, then the documents it found — instead of an empty pause. On a cold
+turn that gap is five to six seconds.
+
+The sidebar needs a login, because Chainlit stores conversations per user. Set
+`CHAINLIT_USER`, `CHAINLIT_PASSWORD` and `CHAINLIT_AUTH_SECRET` in `.env`; there is no
+default password, so leaving them unset simply locks the UI.
+
+Reopening a conversation resumes it for real: the sidebar's thread id *is* the bot's
+memory key, so it remembers what was said before.
+
+### Terminal
 
 Conversations are keyed by session name, and they persist:
 
@@ -85,7 +172,10 @@ All settings live in `.env` (see `.env.example`); defaults are declared in
 | `EMBEDDING_MODEL` | `sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2` | fastembed model (384-dim, multilingual) |
 | `CHROMA_DIR` | `./data/chroma` | vector store location |
 | `RETRIEVER_K` | `8` | chunks retrieved per question |
+| `DETECT_LANGUAGES` | `English,Russian` | languages the bot may answer in |
 | `CHECKPOINT_DB` | `./data/checkpoints.sqlite` | conversation memory |
+| `CHAINLIT_DB` | `./data/chainlit.sqlite` | web UI history (sidebar) |
+| `COLLECTION_NAME` | `ragbot` | Chroma collection name |
 
 Changing `EMBEDDING_MODEL` requires deleting `data/chroma` — vector dimensions
 will not match the existing collection.
@@ -122,12 +212,20 @@ message list by hand.
 
 ```bash
 pip install -e ".[dev]"
-pytest                          # ~4s, no network, no API key
+pytest                          # ~4s, no API key
 RAGBOT_LLM_TESTS=1 pytest       # also runs the handful that call the model
 ```
 
 Tests cover the invariants the pipeline depends on — deterministic chunk ids, citation
 parsing, surrogate handling — plus a retrieval quality evaluation.
+
+CI runs the same suite on every push (`.github/workflows/tests.yml`). Pushing a `v*` tag
+additionally builds the Docker image and publishes it to ghcr.io — but only if the tests
+pass first:
+
+```bash
+git tag v0.1.0 && git push origin v0.1.0
+```
 
 ### Retrieval evaluation
 

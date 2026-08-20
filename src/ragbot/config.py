@@ -34,6 +34,20 @@ class Settings(BaseSettings):
     # conversation memory — LangGraph checkpointer, one row per (thread_id, step)
     checkpoint_db: str = "./data/checkpoints.sqlite"
 
+    # web UI history (Chainlit's own store; ids match the checkpointer's thread ids)
+    chainlit_db: str = "./data/chainlit.sqlite"
+
+    # web UI login. No defaults on purpose: shipping a default password is worse
+    # than refusing to start, and the sidebar needs an authenticated user.
+    chainlit_user: str | None = None
+    chainlit_password: str | None = None
+
+    # Languages the answer-language detector chooses between. Keep this to the
+    # languages you actually use: across all 75 lingua knows, short Cyrillic
+    # questions get mistaken for other Slavic languages. Edit via DETECT_LANGUAGES
+    # in .env — no code change needed.
+    detect_languages: str = "English,Russian"
+
     # Confluence connector (optional)
     confluence_url: str | None = None
     confluence_username: str | None = None

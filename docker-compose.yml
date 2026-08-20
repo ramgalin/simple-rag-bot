@@ -1,0 +1,22 @@
+# Convenience wrapper around the same image:
+#     docker compose up
+# Equivalent to `docker run --env-file .env -p 8000:8000 -v ragbot-data:/app/data`.
+
+services:
+  ragbot:
+    build: .
+    image: ragbot
+    env_file: .env
+    ports:
+      - "8000:8000"
+    volumes:
+      # Conversations, the vector store and stored citations. Without this every
+      # `docker compose down` loses the chat history.
+      - ragbot-data:/app/data
+      # Uncomment to index your own documents instead of the demo corpus,
+      # then run: docker compose run --rm ragbot ingest
+      # - ./docs:/app/docs:ro
+    restart: unless-stopped
+
+volumes:
+  ragbot-data:
