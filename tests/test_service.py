@@ -48,6 +48,17 @@ def test_citation_carries_the_chunk_text_for_a_side_panel(docs):
     assert answer.citations[0].text == "Zeno taught in the Stoa Poikile."
 
 
+def test_index_size_reports_zero_for_a_fresh_store(tmp_path, monkeypatch):
+    """A fresh install has no index, and nothing downstream treats that as an
+    error — retrieval just returns nothing and the model says it does not know.
+    Frontends rely on this check to say so out loud instead."""
+    from ragbot.config import settings
+    monkeypatch.setattr(settings, "chroma_dir", str(tmp_path / "chroma"))
+    monkeypatch.setattr(settings, "collection_name", "empty-probe")
+
+    assert service.index_size() == 0
+
+
 class _StubGraph:
     """Stands in for the compiled graph: records calls, replays canned chunks."""
 

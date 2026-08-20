@@ -78,12 +78,25 @@ rather than failing somewhere inside Chainlit's stack.
 ## Setup from source
 
 ```bash
+git clone https://github.com/ramgalin/simple-rag-bot.git
+cd simple-rag-bot
+
 python3 -m venv .venv
 source .venv/bin/activate
-pip install -r requirements.txt        # installs the project itself (editable)
 
-cp .env.example .env                   # then fill in your key
+pip install -e ".[gui]"                # drop [gui] for the terminal bot only
+                                       # add [dev] if you want to run the tests
+
+cp .env.example .env                   # then fill in your API key
+ragbot-ingest                          # build the index — required before the first run
 ```
+
+`pip install -r requirements.txt` also works and is equivalent to a plain `pip install -e .`
+(terminal only, no web UI).
+
+Skipping `ragbot-ingest` is the classic first-run mistake: nothing errors, the index is
+just empty, and the bot answers "I don't know" to everything. Both frontends warn about
+it at startup.
 
 The first indexing run downloads the embedding model (~240 MB) into
 `/tmp/fastembed_cache`. That is fastembed's default and `/tmp` is wiped on reboot on
@@ -161,6 +174,8 @@ All settings live in `.env` (see `.env.example`); defaults are declared in
 | `RETRIEVER_K` | `8` | chunks retrieved per question |
 | `DETECT_LANGUAGES` | `English,Russian` | languages the bot may answer in |
 | `CHECKPOINT_DB` | `./data/checkpoints.sqlite` | conversation memory |
+| `CHAINLIT_DB` | `./data/chainlit.sqlite` | web UI history (sidebar) |
+| `COLLECTION_NAME` | `ragbot` | Chroma collection name |
 
 Changing `EMBEDDING_MODEL` requires deleting `data/chroma` — vector dimensions
 will not match the existing collection.

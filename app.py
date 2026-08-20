@@ -96,6 +96,9 @@ async def on_chat_start() -> None:
     # first question rather than inside it
     await cl.make_async(service.warmup)()
 
+    if await cl.make_async(service.index_size)() == 0:
+        await cl.Message(content=f"⚠️ {service.EMPTY_INDEX_HINT}").send()
+
 
 @cl.on_chat_resume
 async def on_chat_resume(thread: ThreadDict) -> None:

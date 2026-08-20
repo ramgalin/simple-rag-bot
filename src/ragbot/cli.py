@@ -39,6 +39,9 @@ def run_chat() -> None:
 
     service.warmup()
 
+    if service.index_size() == 0:
+        print(f"\n[warning] {service.EMPTY_INDEX_HINT}")
+
     _flush_stdin()          # once, after the slow load — never inside the loop
     print(f"Ready (session: {session}). Ask a question, or 'exit' / Ctrl-C to quit.\n",
           flush=True)

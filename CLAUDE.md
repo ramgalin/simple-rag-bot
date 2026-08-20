@@ -95,6 +95,10 @@ Answering — `graph.py`, a LangGraph graph `condense → retrieve → generate`
   `ragbot stoicism` resumes that conversation across restarts.
 - `graph.warmup()` loads the embedding model by hitting the retriever only. It must not
   invoke the graph: that would spend an LLM call and write a checkpoint on every startup.
+- An empty index is not an error anywhere in the pipeline — retrieval returns `[]` and
+  the model correctly says it does not know, so a fresh install looks broken rather than
+  unindexed. `service.index_size()` exists for frontends to catch that at startup; both
+  `cli.py` and `app.py` warn.
 - `citations.py:sources_for_answer()` parses `[N]` **out of the answer text** and prints
   only the sources actually cited, not every retrieved chunk. It lives in its own module
   (re-exported from `graph`) so tests can import it without booting the LLM and Chroma.

@@ -35,6 +35,7 @@ from ragbot.graph import (
     warmup as _warmup,
 )
 from ragbot.textio import strip_surrogates
+from ragbot.vectorstore import get_vectorstore
 
 DEFAULT_SESSION = "default"
 
@@ -88,6 +89,23 @@ async def agraph():
 def warmup() -> None:
     """Load the embedding model before the first question arrives."""
     _warmup()
+
+
+EMPTY_INDEX_HINT = (
+    "The index is empty — run `ragbot-ingest` first, or the bot will answer "
+    "\"I don't know\" to everything."
+)
+
+
+def index_size() -> int:
+    """Number of chunks currently in the vector store.
+
+    Frontends check this at startup: an empty index is not an error anywhere in
+    the pipeline — retrieval just returns nothing and the model dutifully says it
+    does not know — so without a hint a fresh install looks broken rather than
+    unindexed.
+    """
+    return get_vectorstore()._collection.count()
 
 
 @dataclass(frozen=True)
