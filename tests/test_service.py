@@ -59,6 +59,39 @@ def test_index_size_reports_zero_for_a_fresh_store(tmp_path, monkeypatch):
     assert service.index_size() == 0
 
 
+def test_reindex_returns_countable_stats(tmp_path, monkeypatch):
+    """The UI reports the numbers, so index() must return them rather than only
+    printing — scraping stdout for a button's status line is not a design."""
+    from ragbot.config import settings
+    monkeypatch.setattr(settings, "chroma_dir", str(tmp_path / "chroma"))
+    monkeypatch.setattr(settings, "collection_name", "reindex-probe")
+    # otherwise the numbers depend on whether the developer's .env has Confluence
+    # configured: 4 documents in CI, 21 here
+    monkeypatch.setattr(settings, "confluence_url", None)
+
+    first = service.reindex()
+    assert first.documents == 4          # the demo corpus in docs/
+    assert first.added == first.chunks > 0
+    assert first.removed == 0
+    assert first.total == first.chunks
+
+    again = service.reindex()
+    assert (again.added, again.removed) == (0, 0)   # idempotent
+    assert again.total == first.total
+
+
+def test_reindex_refuses_to_run_twice_at_once(monkeypatch):
+    """Two concurrent runs compute their delete sets from different snapshots
+    and then fight over them."""
+    monkeypatch.setattr(service, "index", lambda: pytest.fail("must not run"))
+    service._reindex_lock.acquire()
+    try:
+        with pytest.raises(RuntimeError, match="already in progress"):
+            service.reindex()
+    finally:
+        service._reindex_lock.release()
+
+
 class _StubGraph:
     """Stands in for the compiled graph: records calls, replays canned chunks."""
 

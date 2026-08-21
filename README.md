@@ -129,6 +129,16 @@ While the answer is being prepared the UI shows what the bot is doing — the qu
 rewrote for search, then the documents it found — instead of an empty pause. On a cold
 turn that gap is five to six seconds.
 
+Every chat opens with the current index size and a **Переиндексировать** button, so
+re-reading your documents (and Confluence, if configured) does not need a terminal. If a
+source is unreachable the UI says so and leaves its chunks alone rather than dropping
+them from the index.
+
+Everything else stays in `.env`. The login credentials cannot move into the UI — they are
+read before the app starts — and API keys are deliberately left out of it too: a key
+typed into a chat panel lives only for that session unless it is written to the local
+database, which is worse than an environment variable.
+
 The sidebar needs a login, because Chainlit stores conversations per user. Set
 `CHAINLIT_USER`, `CHAINLIT_PASSWORD` and `CHAINLIT_AUTH_SECRET` in `.env`; there is no
 default password, so leaving them unset simply locks the UI.

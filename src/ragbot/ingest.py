@@ -1,3 +1,5 @@
+from dataclasses import dataclass
+
 from langchain_core.documents import Document
 
 from ragbot.connectors.local_folder import load_folder
@@ -40,7 +42,24 @@ def build_chunks() -> tuple[list[Document], list[Document], set[str]]:
     return docs, chunks, loaded
 
 
-def index() -> None:
+@dataclass(frozen=True)
+class IndexResult:
+    """What one indexing run did. Returned so a UI can report it without
+    scraping stdout — the console script still prints the same numbers."""
+
+    documents: int
+    chunks: int
+    added: int
+    removed: int
+    kept: int              # orphans left alone because their source failed to load
+    unavailable: list[str]  # the origins that failed, if any
+
+    @property
+    def total(self) -> int:
+        return self.chunks + self.kept
+
+
+def index() -> IndexResult:
     docs, chunks, loaded = build_chunks()
     ids = compute_ids(chunks)
     print(f"\nLoaded documents: {len(docs)}")
@@ -70,11 +89,22 @@ def index() -> None:
     if stale:
         store.delete(ids=stale)
 
+    unavailable = sorted({CONFLUENCE, LOCAL} - loaded)
+
     print(f"added/updated: {len(to_write)} | removed: {len(stale)} | "
           f"total now: {len(current) + len(kept)}")
     if kept:
-        unavailable = ", ".join(sorted({CONFLUENCE, LOCAL} - loaded)) or "unknown"
-        print(f"kept {len(kept)} chunk(s) from unavailable source(s): {unavailable}")
+        print(f"kept {len(kept)} chunk(s) from unavailable source(s): "
+              f"{', '.join(unavailable) or 'unknown'}")
+
+    return IndexResult(
+        documents=len(docs),
+        chunks=len(current),
+        added=len(to_write),
+        removed=len(stale),
+        kept=len(kept),
+        unavailable=unavailable,
+    )
 
 
 if __name__ == "__main__":
