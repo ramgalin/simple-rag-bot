@@ -19,6 +19,7 @@ for every connected user — so `astream_answer` exists for them, and `ask` stay
 for the terminal.
 """
 
+import threading
 from dataclasses import dataclass
 from typing import AsyncIterator, Iterator
 
@@ -34,6 +35,7 @@ from ragbot.graph import (
     build_graph,
     warmup as _warmup,
 )
+from ragbot.ingest import IndexResult, index
 from ragbot.textio import strip_surrogates
 from ragbot.vectorstore import get_vectorstore
 
@@ -95,6 +97,24 @@ EMPTY_INDEX_HINT = (
     "The index is empty — run `ragbot-ingest` first, or the bot will answer "
     "\"I don't know\" to everything."
 )
+
+
+_reindex_lock = threading.Lock()
+
+
+def reindex() -> IndexResult:
+    """Re-run indexing. Blocking — a UI must call it off the event loop.
+
+    Serialised: two concurrent runs would compute the same delete set from
+    different snapshots and fight over it. The lock is process-wide because so
+    is the vector store.
+    """
+    if not _reindex_lock.acquire(blocking=False):
+        raise RuntimeError("An indexing run is already in progress.")
+    try:
+        return index()
+    finally:
+        _reindex_lock.release()
 
 
 def index_size() -> int:

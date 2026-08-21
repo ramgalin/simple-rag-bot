@@ -129,6 +129,20 @@ It is thin on purpose and talks only to `service.py`.
 - Progress steps come from `service.astream_events`, which streams graph updates
   alongside tokens. Five to six seconds pass before the first token on a cold turn
   (condense, then retrieval), so without them the UI looks frozen.
+- Every chat opens with an index-status message carrying a **Переиндексировать**
+  `cl.Action`. `index()` returns an `IndexResult` for it — a button reporting its
+  outcome by scraping stdout would not be a design. It runs through
+  `cl.make_async(service.reindex)`: indexing is blocking and slow with Confluence, and
+  on the event loop it would freeze every other chat. `service.reindex()` also refuses
+  to run twice at once — concurrent runs compute delete sets from different snapshots.
+- Actions reach the server as `POST /project/action`, and are pushed to the client as a
+  separate `action` event, *not* inside the message payload. Worth knowing when testing.
+- Settings are deliberately **not** exposed in the UI. `CHAINLIT_AUTH_SECRET` and the
+  login pair cannot be (they are read before the app starts — you would need to log in
+  to set what login requires); paths and `collection_name` are deployment concerns; and
+  `embedding_model` invalidates the index when changed, so it is not a toggle but a
+  wipe-and-reindex. API keys could move via `user_env`, but that is per-session and
+  unpersisted, and storing them in the local SQLite would be worse than an env var.
 
 ### Look (`public/`)
 

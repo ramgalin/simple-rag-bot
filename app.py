@@ -90,14 +90,66 @@ async def starters() -> list[cl.Starter]:
     ]
 
 
+INGEST_ACTION = "ingest"
+
+
+def ingest_button() -> cl.Action:
+    return cl.Action(
+        name=INGEST_ACTION,
+        payload={},
+        label="Переиндексировать",
+        tooltip="Перечитать документы (и Confluence, если настроен) и обновить индекс",
+    )
+
+
+async def index_status() -> cl.Message:
+    """The one message every chat opens with: what the bot currently knows, and
+    a button to refresh it. Doubles as the empty-index warning, which is the
+    moment the button is most needed."""
+    size = await cl.make_async(service.index_size)()
+    content = (
+        f"⚠️ {service.EMPTY_INDEX_HINT}" if size == 0
+        else f"Индекс: {size} фрагмент(ов)."
+    )
+    return cl.Message(content=content, actions=[ingest_button()])
+
+
 @cl.on_chat_start
 async def on_chat_start() -> None:
     # loading the embedding model takes a couple of seconds; do it before the
     # first question rather than inside it
     await cl.make_async(service.warmup)()
+    await (await index_status()).send()
 
-    if await cl.make_async(service.index_size)() == 0:
-        await cl.Message(content=f"⚠️ {service.EMPTY_INDEX_HINT}").send()
+
+@cl.action_callback(INGEST_ACTION)
+async def on_ingest(action: cl.Action) -> None:
+    async with cl.Step(name="Индексация", type="tool") as step:
+        step.output = "Читаю документы…"
+        await step.update()
+        try:
+            # blocking, and slow when Confluence is configured — off the event
+            # loop, or the whole server (including other chats) freezes
+            result = await cl.make_async(service.reindex)()
+        except Exception as e:
+            step.output = f"⚠️ {type(e).__name__}: {e}"
+            return
+
+        step.output = (
+            f"Документов: {result.documents} · добавлено: {result.added} · "
+            f"удалено: {result.removed} · всего фрагментов: {result.total}"
+        )
+
+    if result.unavailable:
+        await cl.Message(
+            content=(
+                f"⚠️ Источник(и) недоступны: {', '.join(result.unavailable)}. "
+                f"{result.kept} фрагмент(ов) оставлены нетронутыми, чтобы сбой "
+                f"не стёр их из индекса."
+            )
+        ).send()
+
+    await (await index_status()).send()
 
 
 @cl.on_chat_resume
