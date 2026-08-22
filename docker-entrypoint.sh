@@ -53,6 +53,11 @@ case "$1" in
     secret)
         exec chainlit create-secret
         ;;
+    env-template)
+        # `docker run --rm IMAGE env-template > .env` — no checkout needed.
+        # Written to stdout alone so the redirect produces a usable file.
+        exec cat /app/.env.example
+        ;;
     shell)
         exec /bin/sh
         ;;

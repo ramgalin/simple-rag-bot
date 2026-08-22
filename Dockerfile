@@ -27,6 +27,9 @@ RUN pip install --no-cache-dir -e ".[gui]"
 RUN python -c "from ragbot.embeddings import build_embeddings; build_embeddings()"
 
 COPY docs/ ./docs/
+# shipped so `docker run ... env-template` can print it: someone who pulled the
+# image has no checkout to copy .env.example from
+COPY .env.example ./
 COPY app.py chainlit_store.py ./
 COPY .chainlit/config.toml ./.chainlit/
 COPY public/ ./public/

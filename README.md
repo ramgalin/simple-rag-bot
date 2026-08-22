@@ -35,14 +35,15 @@ The quickest way to get a working bot: no Python setup, no model download, and t
 corpus is already indexed inside the image.
 
 ```bash
-docker pull ghcr.io/ramgalin/simple-rag-bot:latest
+IMAGE=ghcr.io/ramgalin/simple-rag-bot
 
-cp .env.example .env                 # fill in your API key, user and password
-docker run --rm ghcr.io/ramgalin/simple-rag-bot secret    # generate CHAINLIT_AUTH_SECRET, paste into .env
+docker run --rm $IMAGE env-template > .env   # then fill in your API key and login
+docker run --rm $IMAGE secret                # generate CHAINLIT_AUTH_SECRET, paste into .env
 
-docker run --env-file .env -p 8000:8000 \
-  -v ragbot-data:/app/data ghcr.io/ramgalin/simple-rag-bot
+docker run --env-file .env -p 8000:8000 -v ragbot-data:/app/data $IMAGE
 ```
+
+No checkout required — the image prints its own `.env` template.
 
 Building it yourself works the same way — `docker build -t ragbot .`, then use `ragbot`
 in place of the registry path.

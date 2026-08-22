@@ -16,7 +16,7 @@ jobs:
     runs-on: ubuntu-latest
 
     permissions:
-      contents: read
+      contents: write        # required to create the GitHub Release
       packages: write        # required to push to ghcr.io
 
     steps:
@@ -40,6 +40,11 @@ jobs:
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
             type=raw,value=latest,enable=${{ startsWith(github.ref, 'refs/tags/v') }}
+          # metadata-action fills org.opencontainers.image.description from the
+          # repository description, which is empty — leaving the package page
+          # blank. Set it here so it does not depend on a GitHub setting.
+          labels: |
+            org.opencontainers.image.description=RAG chatbot over your documents and Confluence, with cited answers
 
       - uses: docker/build-push-action@v6
         with:
@@ -56,3 +61,27 @@ jobs:
           # minutes. Add linux/arm64 here if Apple Silicon users need a native
           # image and you can spend the build time.
           platforms: linux/amd64
+
+      # The container image is what actually ships; this is the human-facing
+      # entry on the repository's Releases page, which stays empty otherwise.
+      # `--generate-notes` appends the commit log since the previous tag to the
+      # body below.
+      - name: Create the GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          IMAGE: ghcr.io/${{ github.repository }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          gh release create "$TAG" \
+            --title "$TAG" \
+            --generate-notes \
+            --notes "## Run it
+
+          \`\`\`bash
+          docker run --rm $IMAGE:${TAG#v} env-template > .env   # then fill it in
+          docker run --rm $IMAGE:${TAG#v} secret                # paste into .env
+          docker run --env-file .env -p 8000:8000 -v ragbot-data:/app/data $IMAGE:${TAG#v}
+          \`\`\`
+
+          Then open <http://localhost:8000> and sign in with the credentials from your \`.env\`.
+          See the [README](https://github.com/${{ github.repository }}#readme) for details."

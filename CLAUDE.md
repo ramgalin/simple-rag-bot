@@ -191,7 +191,10 @@ Built for "download and run": `docker run --env-file .env -p 8000:8000 ragbot`.
 - The entrypoint validates `CHAINLIT_AUTH_SECRET`, the login pair and the provider's API
   key before starting, because the failure modes are otherwise opaque (Chainlit's JWT
   error is a raw traceback). Its subcommands are `serve` (default), `ingest`, `secret`,
-  `shell`.
+  `env-template`, `shell`.
+- `env-template` cats the bundled `.env.example`, so someone who only pulled the image
+  can produce a config file without a checkout. It must print nothing else — the usage
+  is `docker run --rm IMAGE env-template > .env`.
 - `--host 0.0.0.0`, or the published port maps to nothing listening.
 
 ### CI (`.github/workflows/`)
@@ -207,6 +210,12 @@ Built for "download and run": `docker run --env-file .env -p 8000:8000 ragbot`.
   runs, including the retrieval evaluation (local embeddings, no key).
 - `release.yml` publishes `linux/amd64` only. arm64 would run the baked-index build step
   (ONNX inference) under QEMU emulation.
+- It also creates the GitHub Release entry — pushing a tag publishes the image but
+  leaves the Releases page empty otherwise, which reads as "the release failed".
+  Needs `contents: write` on top of `packages: write`.
+- `metadata-action` fills `org.opencontainers.image.description` from the *repository
+  description*, which is unset — so it is passed explicitly via `labels:`. The other
+  OCI labels (source, revision, version, licenses) it infers correctly on its own.
 
 ### Sidebar history (`chainlit_store.py`)
 
